@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Warehouse;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

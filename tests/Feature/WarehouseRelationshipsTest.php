@@ -30,6 +30,7 @@ class WarehouseRelationshipsTest extends TestCase
     {
         $category = Category::factory()->create();
         $unit = Unit::factory()->create();
+
         return compact('category', 'unit');
     }
 

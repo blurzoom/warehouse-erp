@@ -2,15 +2,14 @@
 
 namespace Database\Factories;
 
-use App\Models\Product;
-use App\Models\Stock;
+use App\Models\Receipt;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Stock>
+ * @extends Factory<Receipt>
  */
-class StockFactory extends Factory
+class ReceiptFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -21,9 +20,10 @@ class StockFactory extends Factory
     {
         return [
             'warehouse_id' => Warehouse::factory(),
-            'product_id' => Product::factory(),
-            'quantity' => fake()->randomFloat(3, 0, 1000),
-            'reserved' => fake()->randomFloat(3, 0, 100),
+            'number' => fake()->unique()->bothify('RCPT-########'),
+            'receipt_date' => fake()->dateTimeBetween('-30 days', 'now'),
+            'status' => 'draft',
+            'comment' => fake()->optional()->sentence(),
         ];
     }
 }

@@ -18,7 +18,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 10);
+        $stockService->increase($warehouse, $product, 10);
 
         $this->assertDatabaseHas('stocks', [
             'warehouse_id' => $warehouse->id,
@@ -33,12 +33,12 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 10);
-        $stockService->receive($warehouse, $product, 5);
+        $stockService->increase($warehouse, $product, 10);
+        $stockService->increase($warehouse, $product, 5);
         $this->assertDatabaseHas('stocks', ['warehouse_id' => $warehouse->id,
             'product_id' => $product->id,
             'quantity' => 15,
-            'reserved' => 0,]);
+            'reserved' => 0, ]);
         $this->assertDatabaseCount('stocks', 1);
     }
 
@@ -47,8 +47,8 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 10);
-        $stockService->issue($warehouse, $product, 4);
+        $stockService->increase($warehouse, $product, 10);
+        $stockService->decrease($warehouse, $product, 4);
 
         $this->assertDatabaseHas('stocks', [
             'warehouse_id' => $warehouse->id,
@@ -65,7 +65,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->issue($warehouse, $product, 4);
+        $stockService->decrease($warehouse, $product, 4);
     }
 
     public function test_issue_throws_exception_when_quantity_is_insufficient()
@@ -75,10 +75,10 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 10);
+        $stockService->increase($warehouse, $product, 10);
 
         try {
-            $stockService->issue($warehouse, $product, 15);
+            $stockService->decrease($warehouse, $product, 15);
         } catch (\DomainException $e) {
             $this->assertDatabaseHas('stocks', [
                 'warehouse_id' => $warehouse->id,
@@ -95,7 +95,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stockService->reserve($warehouse, $product, 10);
 
         $this->assertDatabaseHas('stocks', [
@@ -113,7 +113,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stockService->reserve($warehouse, $product, 10);
         $stockService->reserve($warehouse, $product, 95);
     }
@@ -123,7 +123,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stockService->reserve($warehouse, $product, 10);
 
         $stock = Stock::where('product_id', $product->id)
@@ -138,7 +138,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stockService->reserve($warehouse, $product, 10);
         $stockService->release($warehouse, $product, 10);
 
@@ -161,10 +161,10 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stockService->reserve($warehouse, $product, 80);
         try {
-            $stockService->issue($warehouse, $product, 30);
+            $stockService->decrease($warehouse, $product, 30);
         } catch (\DomainException $e) {
             $this->assertDatabaseHas('stocks', [
                 'warehouse_id' => $warehouse->id,
@@ -182,7 +182,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stockService->reserve($warehouse, $product, 30);
         try {
             $stockService->release($warehouse, $product, 50);
@@ -202,7 +202,7 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
         $stock = $stockService->reserve($warehouse, $product, 100);
         $this->assertEquals(100, $stock->quantity);
         $this->assertEquals(100, $stock->reserved);
@@ -214,8 +214,8 @@ class StockServiceTest extends TestCase
         $product = Product::factory()->create();
         $warehouse = Warehouse::factory()->create();
         $stockService = new StockService;
-        $stockService->receive($warehouse, $product, 100);
-        $stock = $stockService->issue($warehouse, $product, 100);
+        $stockService->increase($warehouse, $product, 100);
+        $stock = $stockService->decrease($warehouse, $product, 100);
         $this->assertEquals(0, $stock->quantity);
         $this->assertEquals(0, $stock->reserved);
         $this->assertEquals(0, $stock->available());
