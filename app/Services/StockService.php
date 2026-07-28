@@ -8,7 +8,7 @@ use App\Models\Warehouse;
 
 class StockService
 {
-    public function receive(Warehouse $warehouse, Product $product, float $quantity): Stock
+    public function increase(Warehouse $warehouse, Product $product, float $quantity): Stock
     {
         $stock = Stock::firstOrCreate(
             ['product_id' => $product->id, 'warehouse_id' => $warehouse->id],
@@ -19,7 +19,7 @@ class StockService
         return $stock;
     }
 
-    public function issue(Warehouse $warehouse, Product $product, float $quantity): Stock
+    public function decrease(Warehouse $warehouse, Product $product, float $quantity): Stock
     {
         $stock = $this->findStock($warehouse, $product);
 
@@ -36,7 +36,6 @@ class StockService
     public function reserve(Warehouse $warehouse, Product $product, float $quantity): Stock
     {
         $stock = $this->findStock($warehouse, $product);
-
 
         if ($stock->available() < $quantity) {
             throw new \DomainException('Insufficient available stock for reservation');
