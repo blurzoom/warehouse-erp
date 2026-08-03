@@ -1,22 +1,27 @@
-# ROADMAP
+# Roadmap
 
-✅ Category
-✅ Unit
-✅ Product
-✅ Warehouse
-✅ Relationships
+## Completed
 
-⏳ Stock
-☐ Stock table
-☐ StockService
-☐ StockMovement
-☐ Recalculate stock
+- ✅ Category
+- ✅ Unit
+- ✅ Product
+- ✅ Warehouse
+- ✅ Domain model relationships
+- ✅ Stock table
+- ✅ StockService
+- ✅ Receipt
+- ✅ ReceiptItem
+- ✅ Issue
+- ✅ IssueItem
 
-⏳ Receipt
-⏳ ReceiptItem
+## Next
 
-⏳ Sale
-⏳ Transfer
-⏳ Inventory
+- ⏳ StockMovement
 
-⏳ Roles & Permissions
+## Planned
+
+- ☐ Stock recalculation
+- ☐ Transfer
+- ☐ Inventory
+- ☐ Roles and permissions
+- ☐ Commercial Sale
