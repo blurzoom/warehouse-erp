@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\StockMovementType;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use BadMethodCallException;
@@ -81,11 +82,20 @@ class ReceiptService
 
         DB::transaction(function () use ($receipt) {
             foreach ($receipt->items as $item) {
-                $this->stockService->increase(
+                $stock = $this->stockService->increase(
                     $receipt->warehouse,
                     $item->product,
                     (float) $item->quantity,
                 );
+
+                $receipt->stockMovements()->create([
+                    'warehouse_id' => $receipt->warehouse_id,
+                    'product_id' => $item->product_id,
+                    'type' => StockMovementType::Receipt,
+                    'quantity' => (float) $item->quantity,
+                    'balance_after' => $stock->quantity,
+                    'created_by' => null,
+                ]);
             }
 
             $receipt->update(['status' => 'posted']);
