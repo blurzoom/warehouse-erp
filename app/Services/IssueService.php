@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\StockMovementType;
 use App\Models\Issue;
 use App\Models\IssueItem;
 use BadMethodCallException;
@@ -81,11 +82,20 @@ class IssueService
 
         DB::transaction(function () use ($issue) {
             foreach ($issue->items as $item) {
-                $this->stockService->decrease(
+                $stock = $this->stockService->decrease(
                     $issue->warehouse,
                     $item->product,
                     (float) $item->quantity,
                 );
+
+                $issue->stockMovements()->create([
+                    'warehouse_id' => $issue->warehouse_id,
+                    'product_id' => $item->product_id,
+                    'type' => StockMovementType::Issue,
+                    'quantity' => -(float) $item->quantity,
+                    'balance_after' => $stock->quantity,
+                    'created_by' => null,
+                ]);
             }
 
             $issue->update(['status' => 'posted']);
