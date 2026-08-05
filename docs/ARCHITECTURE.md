@@ -24,8 +24,6 @@ Models
 
 Database
 
----
-
 ## Principles
 
 - SOLID
@@ -34,16 +32,12 @@ Database
 - Rich Domain
 - Service Layer
 
----
-
 ## Business Logic
 
 Business logic belongs inside service classes.
 
 Controllers are responsible for receiving requests and returning responses,
 but they must not directly implement stock-changing business operations.
-
----
 
 ## Domain Modules
 
@@ -58,6 +52,7 @@ but they must not directly implement stock-changing business operations.
 
 - Stock
 - StockService
+- StockMovement
 
 ### Warehouse Documents
 
@@ -67,8 +62,6 @@ but they must not directly implement stock-changing business operations.
 - Issue
 - IssueItem
 - IssueService
-
----
 
 ## Stock Operations
 
@@ -85,6 +78,28 @@ ReceiptService uses StockService to increase stock when a Receipt is posted.
 
 IssueService uses StockService to decrease stock when an Issue is posted.
 
+When a Receipt is posted, ReceiptService creates a positive StockMovement for each document item.
+
+When an Issue is posted, IssueService creates a negative StockMovement for each document item.
+
+---
+
+## Stock Movement Audit Trail
+
+StockMovement stores the immutable history of physical stock changes.
+
+Each movement:
+
+- belongs to a warehouse and product;
+- stores a positive quantity for a posted Receipt;
+- stores a negative quantity for a posted Issue;
+- references its source document through a polymorphic relationship;
+- stores the resulting physical stock quantity in `balance_after`.
+
+Stock movements are append-only audit records. Existing movements cannot be updated or deleted.
+
+The `stocks` table stores the current inventory balance, while `stock_movements` stores the history explaining how that balance was reached.
+
 ---
 
 ## Transactions
@@ -94,9 +109,10 @@ All document operations that modify stock must use `DB::transaction()`.
 The following actions must be atomic:
 
 - updating stock for every document item;
+- creating the corresponding stock movements;
 - changing the warehouse document status to `posted`.
 
-If processing any document item fails, all stock changes and the document status change must be rolled back.
+If processing any document item fails, all stock changes, stock movements, and the document status change must be rolled back.
 
 ---
 
@@ -109,13 +125,11 @@ Receipt and Issue are warehouse documents.
 - Issue is not a commercial Sale document.
 - Commercial Sale will be implemented separately.
 
----
-
 ## Planned Modules
 
-- StockMovement
-- Stock recalculation
+- Stock reconciliation
 - Transfer
 - Inventory
 - Roles and permissions
 - Commercial Sale
+- Real-time stock updates
