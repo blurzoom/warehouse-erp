@@ -12,6 +12,10 @@ Warehouse management system built with Laravel as a learning project for designi
 - Stock reservation and release
 - Protection against negative available stock
 - Transactional document posting
+- Immutable stock movement audit trail
+- Positive movements for posted Receipt documents
+- Negative movements for posted Issue documents
+- Atomic stock updates and movement recording
 - Database constraints and Eloquent relationships
 - Feature and service tests
 
@@ -24,6 +28,7 @@ Warehouse management system built with Laravel as a learning project for designi
 - Stock
 - Receipt and ReceiptItem
 - Issue and IssueItem
+- StockMovement
 
 ## Tech Stack
 
@@ -37,8 +42,14 @@ Warehouse management system built with Laravel as a learning project for designi
 
 Business operations are implemented in service classes.
 
-Receipt posting increases warehouse stock, while Issue posting decreases warehouse stock. Stock-changing document
-operations are executed inside database transactions.
+Posting a Receipt increases warehouse stock and creates a positive StockMovement. Posting an Issue decreases warehouse
+stock and creates a negative StockMovement.
+
+StockMovement provides an immutable audit trail of inventory changes. Each movement references its source document and
+stores the resulting physical stock balance in `balance_after`.
+
+Document posting, stock balance updates, and stock movement creation are executed atomically inside database transactions.
+If any part of the operation fails, all related changes are rolled back.
 
 Detailed project documentation:
 
@@ -54,13 +65,13 @@ Run the complete test suite:
 ```bash
 php artisan test
 ```
+
 Run code style checks:
 
 ```bash
 vendor/bin/pint --test
 ```
-## Roadmap
 
-The next planned business module is **StockMovement**.
+## Roadmap
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the complete project roadmap.

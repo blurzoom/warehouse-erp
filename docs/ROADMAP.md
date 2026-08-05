@@ -13,15 +13,24 @@
 - ✅ ReceiptItem
 - ✅ Issue
 - ✅ IssueItem
+- ✅ StockMovement
 
 ## Next
 
-- ⏳ StockMovement
+- ⏳ Stock reconciliation
 
 ## Planned
 
-- ☐ Stock recalculation
 - ☐ Transfer
 - ☐ Inventory
 - ☐ Roles and permissions
 - ☐ Commercial Sale
+
+### Real-time stock updates
+
+- ☐ Laravel Broadcasting
+- ☐ Laravel Echo
+- ☐ Redis
+- ☐ Private warehouse channels
+- ☐ Instant stock balance updates
+- ☐ Notifications about newly posted receipts
