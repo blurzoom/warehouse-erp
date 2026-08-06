@@ -41,7 +41,7 @@ The `stocks` table stores only the current physical quantity of each product in 
 
 A current balance does not explain which warehouse operations produced that balance and cannot provide a complete history of inventory changes.
 
-The system requires a reliable audit trail for posted Receipt and Issue documents. This history will also support future stock reconciliation and reporting.
+The system requires a reliable audit trail for posted Receipt and Issue documents. This history supports stock reconciliation and reporting.
 
 ### Decision
 
@@ -64,4 +64,4 @@ Existing stock movements cannot be updated or deleted.
 - Failed document posting does not leave partial stock updates or movement records.
 - Stock history requires additional database storage.
 - Incorrect posted movements must be corrected through new compensating operations instead of modifying historical records.
-- Movement history provides the foundation for future stock reconciliation and reporting.
+- Movement history provides the foundation for stock reconciliation and reporting.

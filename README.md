@@ -13,6 +13,7 @@ Warehouse management system built with Laravel as a learning project for designi
 - Protection against negative available stock
 - Transactional document posting
 - Immutable stock movement audit trail
+- Stock reconciliation through StockReconciliationService
 - Positive movements for posted Receipt documents
 - Negative movements for posted Issue documents
 - Atomic stock updates and movement recording
@@ -28,6 +29,7 @@ Warehouse management system built with Laravel as a learning project for designi
 - Stock
 - Receipt and ReceiptItem
 - Issue and IssueItem
+- StockReconciliationService
 - StockMovement
 
 ## Tech Stack
@@ -44,6 +46,9 @@ Business operations are implemented in service classes.
 
 Posting a Receipt increases warehouse stock and creates a positive StockMovement. Posting an Issue decreases warehouse
 stock and creates a negative StockMovement.
+
+StockReconciliationService calculates expected stock from `stock_movements` and compares it with the current `stocks`
+balance. It returns only discrepancies and does not modify stock data.
 
 StockMovement provides an immutable audit trail of inventory changes. Each movement references its source document and
 stores the resulting physical stock balance in `balance_after`.

@@ -52,6 +52,7 @@ but they must not directly implement stock-changing business operations.
 
 - Stock
 - StockService
+- StockReconciliationService
 - StockMovement
 
 ### Warehouse Documents
@@ -77,6 +78,10 @@ Stock decreases are allowed only when sufficient available stock exists.
 ReceiptService uses StockService to increase stock when a Receipt is posted.
 
 IssueService uses StockService to decrease stock when an Issue is posted.
+
+StockReconciliationService calculates expected stock from `stock_movements` and compares it with the current
+`stocks` balance. It returns only discrepancies and does not modify stock balances, stock movements, or warehouse
+documents.
 
 When a Receipt is posted, ReceiptService creates a positive StockMovement for each document item.
 
@@ -127,7 +132,6 @@ Receipt and Issue are warehouse documents.
 
 ## Planned Modules
 
-- Stock reconciliation
 - Transfer
 - Inventory
 - Roles and permissions
