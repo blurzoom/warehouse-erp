@@ -14,14 +14,14 @@
 - ✅ Issue
 - ✅ IssueItem
 - ✅ StockMovement
+- ✅ Stock reconciliation
 
 ## Next
 
-- ⏳ Stock reconciliation
+- ⏳ Transfer
 
 ## Planned
 
-- ☐ Transfer
 - ☐ Inventory
 - ☐ Roles and permissions
 - ☐ Commercial Sale

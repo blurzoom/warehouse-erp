@@ -19,6 +19,14 @@
 - Reserved quantity cannot exceed available quantity.
 - Reserved quantity cannot be released by more than the currently reserved amount.
 
+## Stock Reconciliation
+
+- Expected quantity is the sum of `quantity` in `stock_movements` for the warehouse and product pair.
+- Actual quantity is the current `stocks.quantity` value, or 0 when no stock record exists.
+- Discrepancy is calculated as actual quantity minus expected quantity.
+- Reconciliation returns only discrepancies.
+- Reconciliation is read-only and does not modify stock data, stock movements, or document status.
+
 ## Receipt
 
 - A new Receipt starts in draft status.
