@@ -66,6 +66,22 @@ class TransferServiceTest extends TestCase
         }
     }
 
+    public function test_an_empty_transfer_cannot_be_posted(): void
+    {
+        $transfer = Transfer::factory()->create();
+
+        $this->expectException(DomainException::class);
+
+        try {
+            app(TransferService::class)->post($transfer);
+        } catch (DomainException $exception) {
+            $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+            $this->assertDatabaseCount('stock_movements', 0);
+
+            throw $exception;
+        }
+    }
+
     public function test_posting_fails_when_the_source_has_insufficient_available_stock(): void
     {
         [$transfer, $sourceWarehouse, $destinationWarehouse, $product] = $this->createTransferWithItems([

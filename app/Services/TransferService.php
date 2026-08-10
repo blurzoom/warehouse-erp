@@ -23,6 +23,7 @@ class TransferService
         DB::transaction(function () use ($transfer): void {
             $transfer = Transfer::query()
                 ->with(['fromWarehouse', 'toWarehouse', 'items.product'])
+                ->lockForUpdate()
                 ->findOrFail($transfer->getKey());
 
             if ($transfer->status !== TransferStatus::Draft) {
