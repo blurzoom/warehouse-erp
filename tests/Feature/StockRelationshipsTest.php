@@ -35,8 +35,8 @@ class StockRelationshipsTest extends TestCase
         $warehouse = Warehouse::factory()->create();
         $product = Product::factory()->create();
         $stock1 = Stock::factory()->for($warehouse)->for($product)->create();
-        $stock2 = Stock::factory()->for($warehouse)->for($product)->create();
-        $stock3 = Stock::factory()->for($warehouse)->for($product)->create();
+        $stock2 = Stock::factory()->for($warehouse)->for(Product::factory())->create();
+        $stock3 = Stock::factory()->for($warehouse)->for(Product::factory())->create();
 
         $stocks = $warehouse->stocks;
 
