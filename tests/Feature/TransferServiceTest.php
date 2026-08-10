@@ -1,0 +1,175 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Enums\StockMovementType;
+use App\Enums\TransferStatus;
+use App\Models\Product;
+use App\Models\Stock;
+use App\Models\StockMovement;
+use App\Models\Transfer;
+use App\Models\TransferItem;
+use App\Models\Warehouse;
+use App\Services\TransferService;
+use DomainException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class TransferServiceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_posting_a_draft_transfer_moves_stock_creates_paired_movements_and_marks_it_as_posted(): void
+    {
+        [$transfer, $sourceWarehouse, $destinationWarehouse, $firstProduct, $secondProduct] = $this->createTransferWithItems([
+            [10, 4, 3],
+            [8, 2, 5],
+        ]);
+
+        app(TransferService::class)->post($transfer);
+
+        $this->assertSame(TransferStatus::Posted, $transfer->fresh()->status);
+        $this->assertStockQuantity($sourceWarehouse, $firstProduct, 6);
+        $this->assertStockQuantity($destinationWarehouse, $firstProduct, 7);
+        $this->assertStockQuantity($sourceWarehouse, $secondProduct, 6);
+        $this->assertStockQuantity($destinationWarehouse, $secondProduct, 7);
+
+        $this->assertTransferMovement($transfer, $sourceWarehouse, $firstProduct, StockMovementType::TransferOut, -4, 6);
+        $this->assertTransferMovement($transfer, $destinationWarehouse, $firstProduct, StockMovementType::TransferIn, 4, 7);
+        $this->assertTransferMovement($transfer, $sourceWarehouse, $secondProduct, StockMovementType::TransferOut, -2, 6);
+        $this->assertTransferMovement($transfer, $destinationWarehouse, $secondProduct, StockMovementType::TransferIn, 2, 7);
+        $this->assertDatabaseCount('stock_movements', 4);
+    }
+
+    public function test_a_transfer_cannot_be_posted_twice(): void
+    {
+        [$transfer, $sourceWarehouse, $destinationWarehouse, $product] = $this->createTransferWithItems([
+            [10, 4, 3],
+        ]);
+        $service = app(TransferService::class);
+
+        $service->post($transfer);
+
+        $this->expectException(DomainException::class);
+
+        try {
+            $service->post($transfer->fresh());
+        } catch (DomainException $exception) {
+            $this->assertSame(TransferStatus::Posted, $transfer->fresh()->status);
+            $this->assertStockQuantity($sourceWarehouse, $product, 6);
+            $this->assertStockQuantity($destinationWarehouse, $product, 7);
+            $this->assertDatabaseCount('stock_movements', 2);
+
+            throw $exception;
+        }
+    }
+
+    public function test_posting_fails_when_the_source_has_insufficient_available_stock(): void
+    {
+        [$transfer, $sourceWarehouse, $destinationWarehouse, $product] = $this->createTransferWithItems([
+            [10, 6, 3, 5],
+        ]);
+
+        $this->expectException(DomainException::class);
+
+        try {
+            app(TransferService::class)->post($transfer);
+        } catch (DomainException $exception) {
+            $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+            $this->assertStockQuantity($sourceWarehouse, $product, 10);
+            $this->assertStockQuantity($destinationWarehouse, $product, 3);
+            $this->assertDatabaseCount('stock_movements', 0);
+
+            throw $exception;
+        }
+    }
+
+    public function test_posting_rolls_back_all_stock_movements_and_status_when_a_later_item_fails(): void
+    {
+        [$transfer, $sourceWarehouse, $destinationWarehouse, $firstProduct, $secondProduct] = $this->createTransferWithItems([
+            [10, 4, 3],
+            [2, 3, 5],
+        ]);
+
+        $this->expectException(DomainException::class);
+
+        try {
+            app(TransferService::class)->post($transfer);
+        } catch (DomainException $exception) {
+            $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+            $this->assertStockQuantity($sourceWarehouse, $firstProduct, 10);
+            $this->assertStockQuantity($destinationWarehouse, $firstProduct, 3);
+            $this->assertStockQuantity($sourceWarehouse, $secondProduct, 2);
+            $this->assertStockQuantity($destinationWarehouse, $secondProduct, 5);
+            $this->assertDatabaseCount('stock_movements', 0);
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * @param  array<int, array{0: float|int, 1: float|int, 2: float|int, 3?: float|int}>  $items
+     * @return array{Transfer, Warehouse, Warehouse, Product, Product}
+     */
+    private function createTransferWithItems(array $items): array
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $transfer = Transfer::factory()
+            ->for($sourceWarehouse, 'fromWarehouse')
+            ->for($destinationWarehouse, 'toWarehouse')
+            ->create();
+        $products = [];
+
+        foreach ($items as $item) {
+            [$sourceQuantity, $transferQuantity, $destinationQuantity] = $item;
+            $reservedQuantity = $item[3] ?? 0;
+            $product = Product::factory()->create();
+            $products[] = $product;
+            Stock::factory()->for($sourceWarehouse)->for($product)->create([
+                'quantity' => $sourceQuantity,
+                'reserved' => $reservedQuantity,
+            ]);
+            Stock::factory()->for($destinationWarehouse)->for($product)->create([
+                'quantity' => $destinationQuantity,
+                'reserved' => 0,
+            ]);
+            TransferItem::factory()->for($transfer)->for($product)->create([
+                'quantity' => $transferQuantity,
+            ]);
+        }
+
+        return [$transfer, $sourceWarehouse, $destinationWarehouse, $products[0], $products[1] ?? $products[0]];
+    }
+
+    private function assertStockQuantity(Warehouse $warehouse, Product $product, float|int $quantity): void
+    {
+        $stock = Stock::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertEquals($quantity, $stock->quantity);
+    }
+
+    private function assertTransferMovement(
+        Transfer $transfer,
+        Warehouse $warehouse,
+        Product $product,
+        StockMovementType $type,
+        float|int $quantity,
+        float|int $balanceAfter,
+    ): void {
+        $movement = StockMovement::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->where('type', $type)
+            ->firstOrFail();
+
+        $this->assertTrue($movement->source->is($transfer));
+        $this->assertEquals($quantity, $movement->quantity);
+        $this->assertEquals($balanceAfter, $movement->balance_after);
+    }
+}
