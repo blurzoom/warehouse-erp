@@ -5,9 +5,30 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\Stock;
 use App\Models\Warehouse;
+use LogicException;
 
 class StockService
 {
+    /**
+     * @param  array<int, int|float>  $quantitiesByProductId
+     * @return array<int, array{
+     *     source_balance: float,
+     *     destination_balance: float
+     * }>
+     */
+    public function transfer(
+        Warehouse $sourceWarehouse,
+        Warehouse $destinationWarehouse,
+        array $quantitiesByProductId,
+    ): array {
+        if ((new Stock)->getConnection()->transactionLevel() === 0) {
+            throw new LogicException('Stock transfer requires an active database transaction.');
+        }
+
+        // TODO(WMS-009 corrective TDD): Materialize and lock stocks, then transfer quantities.
+        return [];
+    }
+
     public function increase(Warehouse $warehouse, Product $product, float $quantity): Stock
     {
         $stock = Stock::firstOrCreate(
