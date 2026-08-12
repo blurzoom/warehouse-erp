@@ -25,8 +25,84 @@ class StockService
             throw new LogicException('Stock transfer requires an active database transaction.');
         }
 
-        // TODO(WMS-009 corrective TDD): Materialize and lock stocks, then transfer quantities.
-        return [];
+        ksort($quantitiesByProductId, SORT_NUMERIC);
+
+        $productIds = array_keys($quantitiesByProductId);
+        $existingDestinationProductIds = Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->getKey())
+            ->whereIn('product_id', $productIds)
+            ->pluck('product_id')
+            ->all();
+        $missingDestinationProductIds = array_values(array_diff(
+            $productIds,
+            $existingDestinationProductIds,
+        ));
+        sort($missingDestinationProductIds, SORT_NUMERIC);
+
+        $timestamp = now();
+
+        foreach ($missingDestinationProductIds as $productId) {
+            Stock::query()->insertOrIgnore([
+                'warehouse_id' => $destinationWarehouse->getKey(),
+                'product_id' => $productId,
+                'quantity' => 0,
+                'reserved' => 0,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+        }
+
+        $stockPairs = [];
+
+        foreach (array_keys($quantitiesByProductId) as $productId) {
+            foreach ([$sourceWarehouse->getKey(), $destinationWarehouse->getKey()] as $warehouseId) {
+                $stockPairs[$warehouseId.':'.$productId] = [
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $productId,
+                ];
+            }
+        }
+
+        $stockPairs = array_values($stockPairs);
+        usort($stockPairs, fn (array $left, array $right): int => [
+            $left['warehouse_id'],
+            $left['product_id'],
+        ] <=> [
+            $right['warehouse_id'],
+            $right['product_id'],
+        ]);
+
+        $lockedStocks = [];
+
+        foreach ($stockPairs as $stockPair) {
+            $stock = Stock::query()
+                ->where('warehouse_id', $stockPair['warehouse_id'])
+                ->where('product_id', $stockPair['product_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedStocks[$stockPair['warehouse_id']][$stockPair['product_id']] = $stock;
+        }
+
+        $balances = [];
+
+        foreach ($quantitiesByProductId as $productId => $quantity) {
+            $sourceStock = $lockedStocks[$sourceWarehouse->getKey()][$productId];
+            $destinationStock = $lockedStocks[$destinationWarehouse->getKey()][$productId];
+
+            $sourceStock->quantity -= $quantity;
+            $sourceStock->save();
+
+            $destinationStock->quantity += $quantity;
+            $destinationStock->save();
+
+            $balances[$productId] = [
+                'source_balance' => (float) $sourceStock->quantity,
+                'destination_balance' => (float) $destinationStock->quantity,
+            ];
+        }
+
+        return $balances;
     }
 
     public function increase(Warehouse $warehouse, Product $product, float $quantity): Stock
