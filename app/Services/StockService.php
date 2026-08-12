@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\Stock;
 use App\Models\Warehouse;
+use DomainException;
 use LogicException;
 
 class StockService
@@ -84,6 +85,14 @@ class StockService
             $lockedStocks[$stockPair['warehouse_id']][$stockPair['product_id']] = $stock;
         }
 
+        foreach ($quantitiesByProductId as $productId => $quantity) {
+            $sourceStock = $lockedStocks[$sourceWarehouse->getKey()][$productId];
+
+            if ($sourceStock->available() < $quantity) {
+                throw new DomainException('Insufficient stock quantity');
+            }
+        }
+
         $balances = [];
 
         foreach ($quantitiesByProductId as $productId => $quantity) {
@@ -121,7 +130,7 @@ class StockService
         $stock = $this->findStock($warehouse, $product);
 
         if ($stock->available() < $quantity) {
-            throw new \DomainException('Insufficient stock quantity');
+            throw new DomainException('Insufficient stock quantity');
         }
 
         $stock->quantity -= $quantity;
@@ -135,7 +144,7 @@ class StockService
         $stock = $this->findStock($warehouse, $product);
 
         if ($stock->available() < $quantity) {
-            throw new \DomainException('Insufficient available stock for reservation');
+            throw new DomainException('Insufficient available stock for reservation');
         }
 
         $stock->reserved += $quantity;
@@ -149,7 +158,7 @@ class StockService
         $stock = $this->findStock($warehouse, $product);
 
         if ($stock->reserved < $quantity) {
-            throw new \DomainException('Insufficient reserved quantity to release');
+            throw new DomainException('Insufficient reserved quantity to release');
         }
 
         $stock->reserved -= $quantity;
@@ -165,7 +174,7 @@ class StockService
             ->first();
 
         if ($stock === null) {
-            throw new \DomainException('Stock not found for warehouse and product');
+            throw new DomainException('Stock not found for warehouse and product');
         }
 
         return $stock;
