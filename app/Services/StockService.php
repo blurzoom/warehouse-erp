@@ -80,7 +80,11 @@ class StockService
                 ->where('warehouse_id', $stockPair['warehouse_id'])
                 ->where('product_id', $stockPair['product_id'])
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->first();
+
+            if ($stock === null) {
+                throw new DomainException('Insufficient stock quantity');
+            }
 
             $lockedStocks[$stockPair['warehouse_id']][$stockPair['product_id']] = $stock;
         }

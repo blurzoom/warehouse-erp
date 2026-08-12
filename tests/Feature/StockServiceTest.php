@@ -433,6 +433,49 @@ class StockServiceTest extends TestCase
         ], $result);
     }
 
+    public function test_transfer_rejects_missing_source_stock(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 4.0],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Insufficient stock quantity',
+            $exception->getMessage(),
+        );
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
