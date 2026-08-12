@@ -7,6 +7,8 @@ use App\Models\Stock;
 use App\Models\Warehouse;
 use App\Services\StockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use LogicException;
 use Tests\TestCase;
 
 class StockServiceTest extends TestCase
@@ -220,6 +222,46 @@ class StockServiceTest extends TestCase
         $this->assertEquals(0, $stock->reserved);
         $this->assertEquals(0, $stock->available());
     }
+
+    public function test_transfer_requires_active_database_transaction(): void
+    {
+        $connection = DB::connection();
+        $connection->rollBack();
+
+        try {
+            $sourceWarehouse = Warehouse::factory()->create();
+            $destinationWarehouse = Warehouse::factory()->create();
+            $product = Product::factory()->create();
+            $category = $product->category;
+            $unit = $product->unit;
+
+            Stock::factory()
+                ->for($sourceWarehouse)
+                ->for($product)
+                ->create([
+                    'quantity' => 10,
+                    'reserved' => 0,
+                ]);
+
+            $this->expectException(LogicException::class);
+            $this->expectExceptionMessage('Stock transfer requires an active database transaction.');
+
+            (new StockService)->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 4.0],
+            );
+        } finally {
+            Stock::query()->delete();
+            $product->delete();
+            $category->delete();
+            $unit->delete();
+            $sourceWarehouse->delete();
+            $destinationWarehouse->delete();
+            $connection->beginTransaction();
+        }
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
