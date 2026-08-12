@@ -376,6 +376,63 @@ class StockServiceTest extends TestCase
         ]);
     }
 
+    public function test_transfer_all_available_quantity_is_allowed(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 7,
+            ]);
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $result = DB::transaction(fn (): array => $stockService->transfer(
+            $sourceWarehouse,
+            $destinationWarehouse,
+            [$product->id => 3.0],
+        ));
+
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 7,
+            'reserved' => 7,
+        ]);
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 3,
+            'reserved' => 0,
+        ]);
+
+        $sourceStock = $sourceStock->fresh();
+        $destinationStock = Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertEquals(7, $sourceStock->quantity);
+        $this->assertEquals(7, $sourceStock->reserved);
+        $this->assertEquals(0, $sourceStock->available());
+        $this->assertEquals(3, $destinationStock->quantity);
+        $this->assertEquals(0, $destinationStock->reserved);
+        $this->assertSame([
+            $product->id => [
+                'source_balance' => 7.0,
+                'destination_balance' => 3.0,
+            ],
+        ], $result);
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
