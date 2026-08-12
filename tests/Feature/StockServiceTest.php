@@ -262,6 +262,70 @@ class StockServiceTest extends TestCase
         }
     }
 
+    public function test_transfer_moves_single_product_between_warehouses(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 0,
+            ]);
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $result = DB::transaction(fn (): array => $stockService->transfer(
+            $sourceWarehouse,
+            $destinationWarehouse,
+            [$product->id => 4.0],
+        ));
+
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 6,
+            'reserved' => 0,
+        ]);
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 4,
+            'reserved' => 0,
+        ]);
+
+        $sourceStock = $sourceStock->fresh();
+        $destinationStock = Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertEquals(6, $sourceStock->quantity);
+        $this->assertEquals(0, $sourceStock->reserved);
+        $this->assertEquals(4, $destinationStock->quantity);
+        $this->assertEquals(0, $destinationStock->reserved);
+        $this->assertSame([
+            $product->id => [
+                'source_balance' => 6.0,
+                'destination_balance' => 4.0,
+            ],
+        ], $result);
+        $this->assertSame(1, Stock::query()
+            ->where('warehouse_id', $sourceWarehouse->id)
+            ->where('product_id', $product->id)
+            ->count());
+        $this->assertSame(1, Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->id)
+            ->where('product_id', $product->id)
+            ->count());
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
