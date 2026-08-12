@@ -26,6 +26,10 @@ class StockService
             throw new LogicException('Stock transfer requires an active database transaction.');
         }
 
+        if ($sourceWarehouse->is($destinationWarehouse)) {
+            throw new DomainException('Source and destination warehouses must be different');
+        }
+
         ksort($quantitiesByProductId, SORT_NUMERIC);
 
         $productIds = array_keys($quantitiesByProductId);

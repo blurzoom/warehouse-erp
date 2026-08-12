@@ -476,6 +476,54 @@ class StockServiceTest extends TestCase
         ]);
     }
 
+    public function test_transfer_rejects_same_source_and_destination_warehouse(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $stock = Stock::factory()
+            ->for($warehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 0,
+            ]);
+        $stockService = new StockService;
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $warehouse,
+                $warehouse,
+                [$product->id => 3.0],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Source and destination warehouses must be different',
+            $exception->getMessage(),
+        );
+
+        $stock = $stock->fresh();
+
+        $this->assertEquals(10, $stock->quantity);
+        $this->assertEquals(0, $stock->reserved);
+        $this->assertEquals(10, $stock->available());
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $warehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'reserved' => 0,
+        ]);
+        $this->assertSame(1, Stock::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->count());
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
