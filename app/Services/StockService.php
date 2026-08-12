@@ -30,6 +30,10 @@ class StockService
             throw new DomainException('Source and destination warehouses must be different');
         }
 
+        if ($quantitiesByProductId === []) {
+            throw new DomainException('Transfer must contain at least one item');
+        }
+
         ksort($quantitiesByProductId, SORT_NUMERIC);
 
         $productIds = array_keys($quantitiesByProductId);

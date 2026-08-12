@@ -524,6 +524,32 @@ class StockServiceTest extends TestCase
             ->count());
     }
 
+    public function test_transfer_rejects_empty_product_list(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $stockService = new StockService;
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Transfer must contain at least one item',
+            $exception->getMessage(),
+        );
+        $this->assertDatabaseEmpty('stocks');
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
