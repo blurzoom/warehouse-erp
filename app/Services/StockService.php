@@ -34,6 +34,14 @@ class StockService
             throw new DomainException('Transfer must contain at least one item');
         }
 
+        foreach ($quantitiesByProductId as $quantity) {
+            if ($quantity <= 0) {
+                throw new DomainException(
+                    'Transfer quantity must be greater than zero'
+                );
+            }
+        }
+
         ksort($quantitiesByProductId, SORT_NUMERIC);
 
         $productIds = array_keys($quantitiesByProductId);

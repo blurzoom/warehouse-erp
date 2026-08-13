@@ -550,6 +550,49 @@ class StockServiceTest extends TestCase
         $this->assertDatabaseEmpty('stocks');
     }
 
+    public function test_transfer_rejects_zero_quantity(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 0,
+            ]);
+        $stockService = new StockService;
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 0.0],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Transfer quantity must be greater than zero',
+            $exception->getMessage(),
+        );
+
+        $sourceStock = $sourceStock->fresh();
+
+        $this->assertEquals(10, $sourceStock->quantity);
+        $this->assertEquals(0, $sourceStock->reserved);
+        $this->assertEquals(10, $sourceStock->available());
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
