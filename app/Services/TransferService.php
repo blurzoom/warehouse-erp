@@ -34,36 +34,40 @@ class TransferService
                 throw new DomainException('Cannot post a transfer with no items');
             }
 
+            $quantitiesByProductId = [];
+
             foreach ($transfer->items as $item) {
-                $sourceStock = $this->stockService->decrease(
-                    $transfer->fromWarehouse,
-                    $item->product,
-                    (float) $item->quantity,
-                );
+                $quantitiesByProductId[(int) $item->product_id] = (float) $item->quantity;
+            }
+
+            $balancesByProductId = $this->stockService->transfer(
+                $transfer->fromWarehouse,
+                $transfer->toWarehouse,
+                $quantitiesByProductId,
+            );
+
+            foreach ($transfer->items as $item) {
+                $productId = (int) $item->product_id;
+                $quantity = $quantitiesByProductId[$productId];
+                $balances = $balancesByProductId[$productId];
 
                 StockMovement::query()->create([
                     'warehouse_id' => $transfer->from_warehouse_id,
-                    'product_id' => $item->product_id,
+                    'product_id' => $productId,
                     'type' => StockMovementType::TransferOut,
-                    'quantity' => -(float) $item->quantity,
-                    'balance_after' => $sourceStock->quantity,
+                    'quantity' => -$quantity,
+                    'balance_after' => $balances['source_balance'],
                     'source_type' => $transfer->getMorphClass(),
                     'source_id' => $transfer->getKey(),
                     'created_by' => null,
                 ]);
 
-                $destinationStock = $this->stockService->increase(
-                    $transfer->toWarehouse,
-                    $item->product,
-                    (float) $item->quantity,
-                );
-
                 StockMovement::query()->create([
                     'warehouse_id' => $transfer->to_warehouse_id,
-                    'product_id' => $item->product_id,
+                    'product_id' => $productId,
                     'type' => StockMovementType::TransferIn,
-                    'quantity' => (float) $item->quantity,
-                    'balance_after' => $destinationStock->quantity,
+                    'quantity' => $quantity,
+                    'balance_after' => $balances['destination_balance'],
                     'source_type' => $transfer->getMorphClass(),
                     'source_id' => $transfer->getKey(),
                     'created_by' => null,

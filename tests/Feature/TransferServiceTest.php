@@ -12,9 +12,11 @@ use App\Models\StockMovement;
 use App\Models\Transfer;
 use App\Models\TransferItem;
 use App\Models\Warehouse;
+use App\Services\StockService;
 use App\Services\TransferService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\TestCase;
 
 class TransferServiceTest extends TestCase
@@ -41,6 +43,51 @@ class TransferServiceTest extends TestCase
         $this->assertTransferMovement($transfer, $sourceWarehouse, $secondProduct, StockMovementType::TransferOut, -2, 6);
         $this->assertTransferMovement($transfer, $destinationWarehouse, $secondProduct, StockMovementType::TransferIn, 2, 7);
         $this->assertDatabaseCount('stock_movements', 4);
+    }
+
+    public function test_posting_delegates_all_item_quantities_to_one_batch_stock_transfer(): void
+    {
+        [$transfer, $sourceWarehouse, $destinationWarehouse, $firstProduct, $secondProduct] = $this->createTransferWithItems([
+            [10, 4.0, 3],
+            [8, 2.0, 5],
+        ]);
+        $stockService = Mockery::mock(StockService::class)->makePartial();
+        $this->app->instance(StockService::class, $stockService);
+        $service = app(TransferService::class);
+
+        $service->post($transfer);
+
+        $this->assertSame(TransferStatus::Posted, $transfer->fresh()->status);
+        $this->assertStockQuantity($sourceWarehouse, $firstProduct, 6);
+        $this->assertStockQuantity($destinationWarehouse, $firstProduct, 7);
+        $this->assertStockQuantity($sourceWarehouse, $secondProduct, 6);
+        $this->assertStockQuantity($destinationWarehouse, $secondProduct, 7);
+
+        $this->assertTransferMovement($transfer, $sourceWarehouse, $firstProduct, StockMovementType::TransferOut, -4, 6);
+        $this->assertTransferMovement($transfer, $destinationWarehouse, $firstProduct, StockMovementType::TransferIn, 4, 7);
+        $this->assertTransferMovement($transfer, $sourceWarehouse, $secondProduct, StockMovementType::TransferOut, -2, 6);
+        $this->assertTransferMovement($transfer, $destinationWarehouse, $secondProduct, StockMovementType::TransferIn, 2, 7);
+        $this->assertDatabaseCount('stock_movements', 4);
+
+        $expectedQuantitiesByProductId = [
+            $firstProduct->id => 4.0,
+            $secondProduct->id => 2.0,
+        ];
+        ksort($expectedQuantitiesByProductId, SORT_NUMERIC);
+
+        $stockService->shouldHaveReceived('transfer')
+            ->once()
+            ->withArgs(function (
+                Warehouse $actualSourceWarehouse,
+                Warehouse $actualDestinationWarehouse,
+                array $actualQuantitiesByProductId,
+            ) use ($sourceWarehouse, $destinationWarehouse, $expectedQuantitiesByProductId): bool {
+                ksort($actualQuantitiesByProductId, SORT_NUMERIC);
+
+                return $actualSourceWarehouse->getKey() === $sourceWarehouse->getKey()
+                    && $actualDestinationWarehouse->getKey() === $destinationWarehouse->getKey()
+                    && $actualQuantitiesByProductId === $expectedQuantitiesByProductId;
+            });
     }
 
     public function test_a_transfer_cannot_be_posted_twice(): void
