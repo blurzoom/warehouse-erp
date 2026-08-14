@@ -16,6 +16,22 @@ class TransferService
     public function __construct(private readonly StockService $stockService) {}
 
     /**
+     * Create a transfer.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function create(array $data): Transfer
+    {
+        return Transfer::query()->create([
+            'number' => $data['number'],
+            'transfer_date' => $data['transfer_date'],
+            'from_warehouse_id' => $data['from_warehouse_id'],
+            'to_warehouse_id' => $data['to_warehouse_id'],
+            'status' => TransferStatus::Draft,
+        ]);
+    }
+
+    /**
      * Post a transfer.
      */
     public function post(Transfer $transfer): void

@@ -23,6 +23,39 @@ class TransferServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_create_transfer_always_uses_draft_status(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $number = 'TRF-00000001';
+        $transferDate = '2026-08-14';
+
+        $transfer = app(TransferService::class)->create([
+            'number' => $number,
+            'transfer_date' => $transferDate,
+            'from_warehouse_id' => $sourceWarehouse->id,
+            'to_warehouse_id' => $destinationWarehouse->id,
+            'status' => TransferStatus::Posted,
+        ]);
+
+        $this->assertInstanceOf(Transfer::class, $transfer);
+        $this->assertSame(TransferStatus::Draft, $transfer->status);
+        $this->assertDatabaseHas('transfers', [
+            'id' => $transfer->id,
+            'number' => $number,
+            'from_warehouse_id' => $sourceWarehouse->id,
+            'to_warehouse_id' => $destinationWarehouse->id,
+            'status' => TransferStatus::Draft->value,
+        ]);
+        $freshTransfer = $transfer->fresh();
+
+        $this->assertSame($transferDate, $freshTransfer->transfer_date->toDateString());
+        $this->assertCount(0, $transfer->items);
+        $this->assertDatabaseCount('transfer_items', 0);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
     public function test_posting_a_draft_transfer_moves_stock_creates_paired_movements_and_marks_it_as_posted(): void
     {
         [$transfer, $sourceWarehouse, $destinationWarehouse, $firstProduct, $secondProduct] = $this->createTransferWithItems([
