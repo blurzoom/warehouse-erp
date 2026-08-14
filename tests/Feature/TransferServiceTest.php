@@ -90,6 +90,33 @@ class TransferServiceTest extends TestCase
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
+    public function test_item_cannot_be_added_to_posted_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Posted,
+        ]);
+        $product = Product::factory()->create();
+        $service = app(TransferService::class);
+
+        $this->assertCount(0, $transfer->items);
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Cannot modify a posted transfer');
+
+        try {
+            $service->addItem($transfer, [
+                'product_id' => $product->id,
+                'quantity' => 4.0,
+            ]);
+        } catch (DomainException $exception) {
+            $this->assertSame(TransferStatus::Posted, $transfer->fresh()->status);
+            $this->assertDatabaseCount('transfer_items', 0);
+            $this->assertDatabaseCount('stocks', 0);
+            $this->assertDatabaseCount('stock_movements', 0);
+
+            throw $exception;
+        }
+    }
+
     public function test_posting_a_draft_transfer_moves_stock_creates_paired_movements_and_marks_it_as_posted(): void
     {
         [$transfer, $sourceWarehouse, $destinationWarehouse, $firstProduct, $secondProduct] = $this->createTransferWithItems([

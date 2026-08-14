@@ -39,6 +39,10 @@ class TransferService
      */
     public function addItem(Transfer $transfer, array $data): TransferItem
     {
+        if ($transfer->status !== TransferStatus::Draft) {
+            throw new DomainException('Cannot modify a posted transfer');
+        }
+
         return $transfer->items()->create([
             'product_id' => $data['product_id'],
             'quantity' => $data['quantity'],
