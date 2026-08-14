@@ -56,6 +56,40 @@ class TransferServiceTest extends TestCase
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
+    public function test_item_can_be_added_to_draft_transfer(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $service = app(TransferService::class);
+        $transfer = $service->create([
+            'number' => 'TRF-00000001',
+            'transfer_date' => '2026-08-14',
+            'from_warehouse_id' => $sourceWarehouse->id,
+            'to_warehouse_id' => $destinationWarehouse->id,
+        ]);
+
+        $item = $service->addItem($transfer, [
+            'product_id' => $product->id,
+            'quantity' => 4.0,
+        ]);
+
+        $this->assertInstanceOf(TransferItem::class, $item);
+        $this->assertSame($transfer->id, $item->transfer_id);
+        $this->assertSame($product->id, $item->product_id);
+        $this->assertEquals(4.0, $item->quantity);
+        $this->assertDatabaseHas('transfer_items', [
+            'id' => $item->id,
+            'transfer_id' => $transfer->id,
+            'product_id' => $product->id,
+            'quantity' => 4.0,
+        ]);
+        $this->assertCount(1, $transfer->fresh()->items);
+        $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
     public function test_posting_a_draft_transfer_moves_stock_creates_paired_movements_and_marks_it_as_posted(): void
     {
         [$transfer, $sourceWarehouse, $destinationWarehouse, $firstProduct, $secondProduct] = $this->createTransferWithItems([

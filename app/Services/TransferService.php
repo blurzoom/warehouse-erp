@@ -8,6 +8,7 @@ use App\Enums\StockMovementType;
 use App\Enums\TransferStatus;
 use App\Models\StockMovement;
 use App\Models\Transfer;
+use App\Models\TransferItem;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -28,6 +29,19 @@ class TransferService
             'from_warehouse_id' => $data['from_warehouse_id'],
             'to_warehouse_id' => $data['to_warehouse_id'],
             'status' => TransferStatus::Draft,
+        ]);
+    }
+
+    /**
+     * Add an item to a transfer.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function addItem(Transfer $transfer, array $data): TransferItem
+    {
+        return $transfer->items()->create([
+            'product_id' => $data['product_id'],
+            'quantity' => $data['quantity'],
         ]);
     }
 
