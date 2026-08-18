@@ -60,6 +60,10 @@ class TransferService
      */
     public function updateItem(TransferItem $item, array $data): TransferItem
     {
+        if ($item->transfer->status !== TransferStatus::Draft) {
+            throw new DomainException('Cannot modify a posted transfer');
+        }
+
         $item->fill([
             'quantity' => $data['quantity'],
         ]);
