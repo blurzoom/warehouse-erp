@@ -18,6 +18,7 @@ use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
+use Throwable;
 
 class TransferServiceTest extends TestCase
 {
@@ -88,6 +89,50 @@ class TransferServiceTest extends TestCase
         $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
         $this->assertDatabaseCount('stocks', 0);
         $this->assertDatabaseCount('stock_movements', 0);
+    }
+
+    public function test_same_product_cannot_be_added_twice_to_a_draft_transfer(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $service = app(TransferService::class);
+        $transfer = $service->create([
+            'number' => 'TRF-00000001',
+            'transfer_date' => '2026-08-18',
+            'from_warehouse_id' => $sourceWarehouse->id,
+            'to_warehouse_id' => $destinationWarehouse->id,
+        ]);
+
+        $this->assertSame(TransferStatus::Draft, $transfer->status);
+
+        $item = $service->addItem($transfer, [
+            'product_id' => $product->id,
+            'quantity' => 4.0,
+        ]);
+
+        $this->assertModelExists($item);
+        $this->assertSame($transfer->id, $item->transfer_id);
+        $this->assertSame($product->id, $item->product_id);
+
+        $caughtException = null;
+
+        try {
+            $service->addItem($transfer, [
+                'product_id' => $product->id,
+                'quantity' => 2.0,
+            ]);
+        } catch (Throwable $exception) {
+            $caughtException = $exception;
+        }
+
+        $matchingItemCount = TransferItem::query()
+            ->where('transfer_id', $transfer->id)
+            ->where('product_id', $product->id)
+            ->count();
+
+        $this->assertSame(1, $matchingItemCount);
+        $this->assertInstanceOf(DomainException::class, $caughtException);
     }
 
     public function test_item_cannot_be_added_to_posted_transfer(): void

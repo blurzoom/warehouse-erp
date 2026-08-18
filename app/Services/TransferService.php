@@ -43,6 +43,10 @@ class TransferService
             throw new DomainException('Cannot modify a posted transfer');
         }
 
+        if ($transfer->items()->where('product_id', $data['product_id'])->exists()) {
+            throw new DomainException('Product already exists in transfer');
+        }
+
         return $transfer->items()->create([
             'product_id' => $data['product_id'],
             'quantity' => $data['quantity'],
