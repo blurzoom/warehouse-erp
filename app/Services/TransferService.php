@@ -54,6 +54,21 @@ class TransferService
     }
 
     /**
+     * Update a transfer item.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updateItem(TransferItem $item, array $data): TransferItem
+    {
+        $item->fill([
+            'quantity' => $data['quantity'],
+        ]);
+        $item->save();
+
+        return $item;
+    }
+
+    /**
      * Post a transfer.
      */
     public function post(Transfer $transfer): void
