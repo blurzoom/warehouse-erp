@@ -77,6 +77,14 @@ class TransferService
     }
 
     /**
+     * Remove a transfer item.
+     */
+    public function removeItem(TransferItem $item): void
+    {
+        $item->delete();
+    }
+
+    /**
      * Post a transfer.
      */
     public function post(Transfer $transfer): void

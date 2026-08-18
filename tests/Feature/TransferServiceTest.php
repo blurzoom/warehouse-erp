@@ -198,6 +198,34 @@ class TransferServiceTest extends TestCase
         $this->assertInstanceOf(DomainException::class, $caughtException);
     }
 
+    public function test_item_can_be_removed_from_a_draft_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Draft,
+        ]);
+        $itemToRemove = TransferItem::factory()->for($transfer)->create();
+        $remainingItem = TransferItem::factory()->for($transfer)->create();
+
+        $this->assertSame(TransferStatus::Draft, $transfer->status);
+        $this->assertModelExists($itemToRemove);
+        $this->assertModelExists($remainingItem);
+        $this->assertTrue($transfer->fresh()->items->contains($itemToRemove));
+        $this->assertCount(2, $transfer->fresh()->items);
+
+        app(TransferService::class)->removeItem($itemToRemove);
+
+        $freshTransfer = $transfer->fresh();
+
+        $this->assertModelMissing($itemToRemove);
+        $this->assertModelExists($remainingItem);
+        $this->assertSame($remainingItem->id, $freshTransfer->items->sole()->id);
+        $this->assertModelExists($freshTransfer);
+        $this->assertSame(TransferStatus::Draft, $freshTransfer->status);
+        $this->assertDatabaseCount('transfer_items', 1);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
     public function test_item_cannot_be_updated_on_a_posted_transfer(): void
     {
         $transfer = Transfer::factory()->create([
