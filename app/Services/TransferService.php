@@ -64,6 +64,10 @@ class TransferService
             throw new DomainException('Cannot modify a posted transfer');
         }
 
+        if ($data['quantity'] <= 0) {
+            throw new DomainException('Transfer quantity must be greater than zero');
+        }
+
         $item->fill([
             'quantity' => $data['quantity'],
         ]);

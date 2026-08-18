@@ -164,6 +164,40 @@ class TransferServiceTest extends TestCase
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
+    public function test_item_quantity_cannot_be_updated_to_zero_on_a_draft_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Draft,
+        ]);
+        $item = TransferItem::factory()
+            ->for($transfer)
+            ->create(['quantity' => 4.0]);
+
+        $this->assertSame(TransferStatus::Draft, $transfer->status);
+        $this->assertModelExists($item);
+        $this->assertSame('4.000', $item->fresh()->quantity);
+
+        $caughtException = null;
+
+        try {
+            app(TransferService::class)->updateItem($item, [
+                'quantity' => 0.0,
+            ]);
+        } catch (Throwable $exception) {
+            $caughtException = $exception;
+        }
+
+        $freshItem = $item->fresh();
+
+        $this->assertSame('4.000', $freshItem->quantity);
+        $this->assertModelExists($freshItem);
+        $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+        $this->assertDatabaseCount('transfer_items', 1);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertInstanceOf(DomainException::class, $caughtException);
+    }
+
     public function test_item_cannot_be_updated_on_a_posted_transfer(): void
     {
         $transfer = Transfer::factory()->create([
