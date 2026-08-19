@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Enums\TransferStatus;
 use App\Models\Product;
+use App\Models\StockMovement;
 use App\Models\Transfer;
 use App\Models\TransferItem;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -73,6 +75,30 @@ class TransferRelationshipsTest extends TestCase
         $this->assertCount(2, $transfer->items);
         $this->assertTrue($transfer->items->contains($firstItem));
         $this->assertTrue($transfer->items->contains($secondItem));
+    }
+
+    public function test_transfer_has_many_stock_movements(): void
+    {
+        $transfer = Transfer::factory()->create();
+        $otherTransfer = Transfer::factory()->create();
+        $firstMovement = StockMovement::factory()->create([
+            'source_type' => $transfer->getMorphClass(),
+            'source_id' => $transfer->getKey(),
+        ]);
+        $secondMovement = StockMovement::factory()->create([
+            'source_type' => $transfer->getMorphClass(),
+            'source_id' => $transfer->getKey(),
+        ]);
+        $unrelatedMovement = StockMovement::factory()->create([
+            'source_type' => $otherTransfer->getMorphClass(),
+            'source_id' => $otherTransfer->getKey(),
+        ]);
+
+        $this->assertInstanceOf(MorphMany::class, $transfer->stockMovements());
+        $this->assertCount(2, $transfer->stockMovements);
+        $this->assertTrue($transfer->stockMovements->contains($firstMovement));
+        $this->assertTrue($transfer->stockMovements->contains($secondMovement));
+        $this->assertFalse($transfer->stockMovements->contains($unrelatedMovement));
     }
 
     public function test_transfer_item_factory_creates_a_valid_transfer_item(): void
