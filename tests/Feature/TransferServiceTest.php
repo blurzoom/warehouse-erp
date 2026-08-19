@@ -135,6 +135,39 @@ class TransferServiceTest extends TestCase
         $this->assertInstanceOf(DomainException::class, $caughtException);
     }
 
+    public function test_item_with_zero_quantity_cannot_be_added_to_a_draft_transfer(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $service = app(TransferService::class);
+        $transfer = $service->create([
+            'number' => 'TRF-00000001',
+            'transfer_date' => '2026-08-19',
+            'from_warehouse_id' => $sourceWarehouse->id,
+            'to_warehouse_id' => $destinationWarehouse->id,
+        ]);
+
+        $this->assertSame(TransferStatus::Draft, $transfer->status);
+        $this->assertDatabaseCount('transfer_items', 0);
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Transfer quantity must be greater than zero');
+
+        try {
+            $service->addItem($transfer, [
+                'product_id' => $product->id,
+                'quantity' => 0.0,
+            ]);
+        } catch (DomainException $exception) {
+            $this->assertDatabaseCount('transfer_items', 0);
+            $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+            $this->assertDatabaseCount('stocks', 0);
+            $this->assertDatabaseCount('stock_movements', 0);
+
+            throw $exception;
+        }
+    }
+
     public function test_item_can_be_updated_on_a_draft_transfer(): void
     {
         $transfer = Transfer::factory()->create([

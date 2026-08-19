@@ -43,6 +43,10 @@ class TransferService
             throw new DomainException('Cannot modify a posted transfer');
         }
 
+        if ($data['quantity'] <= 0) {
+            throw new DomainException('Transfer quantity must be greater than zero');
+        }
+
         if ($transfer->items()->where('product_id', $data['product_id'])->exists()) {
             throw new DomainException('Product already exists in transfer');
         }
