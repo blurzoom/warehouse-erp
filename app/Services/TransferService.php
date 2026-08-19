@@ -81,6 +81,10 @@ class TransferService
      */
     public function removeItem(TransferItem $item): void
     {
+        if ($item->transfer->status !== TransferStatus::Draft) {
+            throw new DomainException('Cannot modify a posted transfer');
+        }
+
         $item->delete();
     }
 

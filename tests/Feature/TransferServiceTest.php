@@ -226,6 +226,31 @@ class TransferServiceTest extends TestCase
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
+    public function test_item_cannot_be_removed_from_a_posted_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Posted,
+        ]);
+        $item = TransferItem::factory()->for($transfer)->create();
+
+        $this->assertSame(TransferStatus::Posted, $transfer->status);
+        $this->assertModelExists($item);
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Cannot modify a posted transfer');
+
+        try {
+            app(TransferService::class)->removeItem($item);
+        } catch (DomainException $exception) {
+            $this->assertModelExists($item);
+            $this->assertSame(TransferStatus::Posted, $transfer->fresh()->status);
+            $this->assertDatabaseCount('transfer_items', 1);
+            $this->assertDatabaseCount('stocks', 0);
+            $this->assertDatabaseCount('stock_movements', 0);
+
+            throw $exception;
+        }
+    }
+
     public function test_item_cannot_be_updated_on_a_posted_transfer(): void
     {
         $transfer = Transfer::factory()->create([
