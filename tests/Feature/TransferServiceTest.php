@@ -493,6 +493,107 @@ class TransferServiceTest extends TestCase
         }
     }
 
+    public function test_header_can_be_updated_on_a_draft_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Draft,
+            'transfer_date' => '2026-08-23',
+        ]);
+        $newSourceWarehouse = Warehouse::factory()->create();
+        $newDestinationWarehouse = Warehouse::factory()->create();
+
+        app(TransferService::class)->update($transfer, [
+            'number' => 'TRF-UPDATED',
+            'transfer_date' => '2026-08-24',
+            'from_warehouse_id' => $newSourceWarehouse->id,
+            'to_warehouse_id' => $newDestinationWarehouse->id,
+        ]);
+
+        $freshTransfer = $transfer->fresh();
+
+        $this->assertSame('TRF-UPDATED', $freshTransfer->number);
+        $this->assertSame('2026-08-24', $freshTransfer->transfer_date->toDateString());
+        $this->assertSame($newSourceWarehouse->id, $freshTransfer->from_warehouse_id);
+        $this->assertSame($newDestinationWarehouse->id, $freshTransfer->to_warehouse_id);
+        $this->assertSame(TransferStatus::Draft, $freshTransfer->status);
+    }
+
+    public function test_draft_transfer_cannot_be_updated_to_use_same_source_and_destination_warehouse(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $transfer = Transfer::factory()
+            ->for($sourceWarehouse, 'fromWarehouse')
+            ->for($destinationWarehouse, 'toWarehouse')
+            ->create([
+                'status' => TransferStatus::Draft,
+            ]);
+
+        $caughtException = null;
+
+        try {
+            app(TransferService::class)->update($transfer, [
+                'to_warehouse_id' => $sourceWarehouse->id,
+            ]);
+        } catch (Throwable $exception) {
+            $caughtException = $exception;
+        }
+
+        $freshTransfer = $transfer->fresh();
+
+        $this->assertSame($sourceWarehouse->id, $freshTransfer->from_warehouse_id);
+        $this->assertSame($destinationWarehouse->id, $freshTransfer->to_warehouse_id);
+        $this->assertSame(TransferStatus::Draft, $freshTransfer->status);
+        $this->assertInstanceOf(DomainException::class, $caughtException);
+        $this->assertSame(
+            'Source and destination warehouses must be different',
+            $caughtException?->getMessage(),
+        );
+    }
+
+    public function test_header_cannot_be_updated_on_a_posted_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Posted,
+            'transfer_date' => '2026-08-23',
+        ]);
+        $caughtException = null;
+
+        try {
+            app(TransferService::class)->update($transfer, [
+                'transfer_date' => '2026-08-24',
+            ]);
+        } catch (Throwable $exception) {
+            $caughtException = $exception;
+        }
+        $freshTransfer = $transfer->fresh();
+        $this->assertSame(
+            '2026-08-23',
+            $freshTransfer->transfer_date->toDateString(),
+        );
+        $this->assertSame(TransferStatus::Posted, $freshTransfer->status);
+        $this->assertInstanceOf(DomainException::class, $caughtException);
+        $this->assertSame(
+            'Cannot modify a posted transfer',
+            $caughtException?->getMessage(),
+        );
+    }
+
+    public function test_update_cannot_change_transfer_status_directly(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Draft,
+        ]);
+
+        app(TransferService::class)->update($transfer, [
+            'status' => TransferStatus::Posted,
+        ]);
+
+        $freshTransfer = $transfer->fresh();
+
+        $this->assertSame(TransferStatus::Draft, $freshTransfer->status);
+    }
+
     /**
      * @param  array<int, array{0: float|int, 1: float|int, 2: float|int, 3?: float|int}>  $items
      * @return array{Transfer, Warehouse, Warehouse, Product, Product}

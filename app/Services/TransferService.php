@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\Models\Transfer;
 use App\Models\TransferItem;
 use DomainException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class TransferService
@@ -153,5 +154,39 @@ class TransferService
 
             $transfer->update(['status' => TransferStatus::Posted]);
         });
+    }
+
+    /**
+     * Update a transfer.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function update(Transfer $transfer, array $data): Transfer
+    {
+        if ($transfer->status !== TransferStatus::Draft) {
+            throw new DomainException('Cannot modify a posted transfer');
+        }
+        $fromWarehouseId = (int) (
+            $data['from_warehouse_id'] ?? $transfer->from_warehouse_id
+        );
+
+        $toWarehouseId = (int) (
+            $data['to_warehouse_id'] ?? $transfer->to_warehouse_id
+        );
+
+        if ($fromWarehouseId === $toWarehouseId) {
+            throw new DomainException(
+                'Source and destination warehouses must be different'
+            );
+        }
+        $transfer->fill(Arr::only($data, [
+            'number',
+            'transfer_date',
+            'from_warehouse_id',
+            'to_warehouse_id',
+        ]));
+        $transfer->save();
+
+        return $transfer;
     }
 }
