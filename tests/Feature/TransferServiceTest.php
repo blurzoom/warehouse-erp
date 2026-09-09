@@ -543,6 +543,30 @@ class TransferServiceTest extends TestCase
         $this->assertSame(TransferStatus::Draft, $freshTransfer->status);
     }
 
+    public function test_comment_can_be_updated_on_a_draft_transfer(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $transfer = Transfer::factory()
+            ->for($sourceWarehouse, 'fromWarehouse')
+            ->for($destinationWarehouse, 'toWarehouse')
+            ->create([
+                'status' => TransferStatus::Draft,
+                'comment' => 'Original comment',
+            ]);
+
+        app(TransferService::class)->update($transfer, [
+            'comment' => 'Updated comment',
+        ]);
+
+        $freshTransfer = $transfer->fresh();
+
+        $this->assertSame(TransferStatus::Draft, $freshTransfer->status);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertSame('Updated comment', $freshTransfer->comment);
+    }
+
     public function test_draft_transfer_cannot_be_updated_to_use_same_source_and_destination_warehouse(): void
     {
         $sourceWarehouse = Warehouse::factory()->create();

@@ -185,6 +185,7 @@ class TransferService
             'transfer_date',
             'from_warehouse_id',
             'to_warehouse_id',
+            'comment',
         ]));
         $transfer->save();
 
