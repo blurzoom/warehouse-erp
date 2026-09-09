@@ -16,6 +16,7 @@ class TransferItem extends Model
         'transfer_id',
         'product_id',
         'quantity',
+        'comment',
     ];
 
     protected $casts = [

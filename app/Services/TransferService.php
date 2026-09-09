@@ -56,6 +56,7 @@ class TransferService
         return $transfer->items()->create([
             'product_id' => $data['product_id'],
             'quantity' => $data['quantity'],
+            'comment' => $data['comment'] ?? null,
         ]);
     }
 

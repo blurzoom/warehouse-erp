@@ -116,6 +116,33 @@ class TransferServiceTest extends TestCase
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
+    public function test_add_item_persists_optional_comment(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $service = app(TransferService::class);
+        $transfer = $service->create([
+            'number' => 'TRF-00000001',
+            'transfer_date' => '2026-08-14',
+            'from_warehouse_id' => $sourceWarehouse->id,
+            'to_warehouse_id' => $destinationWarehouse->id,
+        ]);
+
+        $item = $service->addItem($transfer, [
+            'product_id' => $product->id,
+            'quantity' => 4.0,
+            'comment' => 'Handle with care',
+        ]);
+
+        $freshItem = $item->fresh();
+
+        $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertSame('Handle with care', $freshItem->comment);
+    }
+
     public function test_same_product_cannot_be_added_twice_to_a_draft_transfer(): void
     {
         $sourceWarehouse = Warehouse::factory()->create();
