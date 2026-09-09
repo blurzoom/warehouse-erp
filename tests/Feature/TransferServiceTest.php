@@ -280,6 +280,36 @@ class TransferServiceTest extends TestCase
         $this->assertSame('Updated comment', $freshItem->comment);
     }
 
+    public function test_item_comment_can_be_updated_without_quantity_on_a_draft_transfer(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $transfer = Transfer::factory()
+            ->for($sourceWarehouse, 'fromWarehouse')
+            ->for($destinationWarehouse, 'toWarehouse')
+            ->create(['status' => TransferStatus::Draft]);
+        $product = Product::factory()->create();
+        $item = TransferItem::factory()
+            ->for($transfer)
+            ->for($product)
+            ->create([
+                'quantity' => 4,
+                'comment' => 'Original comment',
+            ]);
+
+        app(TransferService::class)->updateItem($item, [
+            'comment' => 'Updated comment',
+        ]);
+
+        $freshItem = $item->fresh();
+
+        $this->assertSame('Updated comment', $freshItem->comment);
+        $this->assertSame('4.000', $freshItem->quantity);
+        $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+        $this->assertDatabaseCount('stocks', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
     public function test_item_quantity_cannot_be_updated_to_zero_on_a_draft_transfer(): void
     {
         $transfer = Transfer::factory()->create([

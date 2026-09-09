@@ -71,7 +71,7 @@ class TransferService
             throw new DomainException('Cannot modify a posted transfer');
         }
 
-        if ($data['quantity'] <= 0) {
+        if (array_key_exists('quantity', $data) && $data['quantity'] <= 0) {
             throw new DomainException('Transfer quantity must be greater than zero');
         }
 
