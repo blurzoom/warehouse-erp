@@ -75,9 +75,7 @@ class TransferService
             throw new DomainException('Transfer quantity must be greater than zero');
         }
 
-        $item->fill([
-            'quantity' => $data['quantity'],
-        ]);
+        $item->fill(Arr::only($data, ['quantity', 'comment']));
         $item->save();
 
         return $item;
