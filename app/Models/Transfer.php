@@ -21,6 +21,7 @@ class Transfer extends Model
         'from_warehouse_id',
         'to_warehouse_id',
         'status',
+        'comment',
     ];
 
     protected $casts = [

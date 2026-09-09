@@ -30,6 +30,7 @@ class TransferService
             'from_warehouse_id' => $data['from_warehouse_id'],
             'to_warehouse_id' => $data['to_warehouse_id'],
             'status' => TransferStatus::Draft,
+            'comment' => $data['comment'] ?? null,
         ]);
     }
 
