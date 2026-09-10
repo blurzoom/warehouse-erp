@@ -7,6 +7,8 @@ use App\Models\Stock;
 use App\Models\Warehouse;
 use App\Services\StockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use LogicException;
 use Tests\TestCase;
 
 class StockServiceTest extends TestCase
@@ -220,6 +222,377 @@ class StockServiceTest extends TestCase
         $this->assertEquals(0, $stock->reserved);
         $this->assertEquals(0, $stock->available());
     }
+
+    public function test_transfer_requires_active_database_transaction(): void
+    {
+        $connection = DB::connection();
+        $connection->rollBack();
+
+        try {
+            $sourceWarehouse = Warehouse::factory()->create();
+            $destinationWarehouse = Warehouse::factory()->create();
+            $product = Product::factory()->create();
+            $category = $product->category;
+            $unit = $product->unit;
+
+            Stock::factory()
+                ->for($sourceWarehouse)
+                ->for($product)
+                ->create([
+                    'quantity' => 10,
+                    'reserved' => 0,
+                ]);
+
+            $this->expectException(LogicException::class);
+            $this->expectExceptionMessage('Stock transfer requires an active database transaction.');
+
+            (new StockService)->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 4.0],
+            );
+        } finally {
+            Stock::query()->delete();
+            $product->delete();
+            $category->delete();
+            $unit->delete();
+            $sourceWarehouse->delete();
+            $destinationWarehouse->delete();
+            $connection->beginTransaction();
+        }
+    }
+
+    public function test_transfer_moves_single_product_between_warehouses(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 0,
+            ]);
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $result = DB::transaction(fn (): array => $stockService->transfer(
+            $sourceWarehouse,
+            $destinationWarehouse,
+            [$product->id => 4.0],
+        ));
+
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 6,
+            'reserved' => 0,
+        ]);
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 4,
+            'reserved' => 0,
+        ]);
+
+        $sourceStock = $sourceStock->fresh();
+        $destinationStock = Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertEquals(6, $sourceStock->quantity);
+        $this->assertEquals(0, $sourceStock->reserved);
+        $this->assertEquals(4, $destinationStock->quantity);
+        $this->assertEquals(0, $destinationStock->reserved);
+        $this->assertSame([
+            $product->id => [
+                'source_balance' => 6.0,
+                'destination_balance' => 4.0,
+            ],
+        ], $result);
+        $this->assertSame(1, Stock::query()
+            ->where('warehouse_id', $sourceWarehouse->id)
+            ->where('product_id', $product->id)
+            ->count());
+        $this->assertSame(1, Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->id)
+            ->where('product_id', $product->id)
+            ->count());
+    }
+
+    public function test_transfer_cannot_consume_reserved_stock(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 7,
+            ]);
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 4.0],
+            ));
+        } catch (\DomainException $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame('Insufficient stock quantity', $exception->getMessage());
+
+        $sourceStock = $sourceStock->fresh();
+
+        $this->assertEquals(10, $sourceStock->quantity);
+        $this->assertEquals(7, $sourceStock->reserved);
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'reserved' => 7,
+        ]);
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+    }
+
+    public function test_transfer_all_available_quantity_is_allowed(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 7,
+            ]);
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $result = DB::transaction(fn (): array => $stockService->transfer(
+            $sourceWarehouse,
+            $destinationWarehouse,
+            [$product->id => 3.0],
+        ));
+
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 7,
+            'reserved' => 7,
+        ]);
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 3,
+            'reserved' => 0,
+        ]);
+
+        $sourceStock = $sourceStock->fresh();
+        $destinationStock = Stock::query()
+            ->where('warehouse_id', $destinationWarehouse->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertEquals(7, $sourceStock->quantity);
+        $this->assertEquals(7, $sourceStock->reserved);
+        $this->assertEquals(0, $sourceStock->available());
+        $this->assertEquals(3, $destinationStock->quantity);
+        $this->assertEquals(0, $destinationStock->reserved);
+        $this->assertSame([
+            $product->id => [
+                'source_balance' => 7.0,
+                'destination_balance' => 3.0,
+            ],
+        ], $result);
+    }
+
+    public function test_transfer_rejects_missing_source_stock(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $stockService = new StockService;
+
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 4.0],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Insufficient stock quantity',
+            $exception->getMessage(),
+        );
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $sourceWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+    }
+
+    public function test_transfer_rejects_same_source_and_destination_warehouse(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $stock = Stock::factory()
+            ->for($warehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 0,
+            ]);
+        $stockService = new StockService;
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $warehouse,
+                $warehouse,
+                [$product->id => 3.0],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Source and destination warehouses must be different',
+            $exception->getMessage(),
+        );
+
+        $stock = $stock->fresh();
+
+        $this->assertEquals(10, $stock->quantity);
+        $this->assertEquals(0, $stock->reserved);
+        $this->assertEquals(10, $stock->available());
+        $this->assertDatabaseHas('stocks', [
+            'warehouse_id' => $warehouse->id,
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'reserved' => 0,
+        ]);
+        $this->assertSame(1, Stock::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->count());
+    }
+
+    public function test_transfer_rejects_empty_product_list(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $stockService = new StockService;
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Transfer must contain at least one item',
+            $exception->getMessage(),
+        );
+        $this->assertDatabaseEmpty('stocks');
+    }
+
+    public function test_transfer_rejects_zero_quantity(): void
+    {
+        $sourceWarehouse = Warehouse::factory()->create();
+        $destinationWarehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create();
+        $sourceStock = Stock::factory()
+            ->for($sourceWarehouse)
+            ->for($product)
+            ->create([
+                'quantity' => 10,
+                'reserved' => 0,
+            ]);
+        $stockService = new StockService;
+
+        $exception = null;
+
+        try {
+            DB::transaction(fn (): array => $stockService->transfer(
+                $sourceWarehouse,
+                $destinationWarehouse,
+                [$product->id => 0.0],
+            ));
+        } catch (\Throwable $caughtException) {
+            $exception = $caughtException;
+        }
+
+        $this->assertInstanceOf(\DomainException::class, $exception);
+        $this->assertSame(
+            'Transfer quantity must be greater than zero',
+            $exception->getMessage(),
+        );
+
+        $sourceStock = $sourceStock->fresh();
+
+        $this->assertEquals(10, $sourceStock->quantity);
+        $this->assertEquals(0, $sourceStock->reserved);
+        $this->assertEquals(10, $sourceStock->available());
+        $this->assertDatabaseMissing('stocks', [
+            'warehouse_id' => $destinationWarehouse->id,
+            'product_id' => $product->id,
+        ]);
+    }
+
     /*
 reserve() рівно весь доступний залишок (має бути дозволено);
 issue() рівно весь доступний залишок (має бути дозволено).
