@@ -430,6 +430,36 @@ class TransferServiceTest extends TestCase
         }
     }
 
+    public function test_item_comment_cannot_be_updated_on_a_posted_transfer(): void
+    {
+        $transfer = Transfer::factory()->create([
+            'status' => TransferStatus::Posted,
+        ]);
+        $item = TransferItem::factory()
+            ->for($transfer)
+            ->create([
+                'quantity' => 4.0,
+                'comment' => 'Original comment',
+            ]);
+
+        $caughtException = null;
+
+        try {
+            app(TransferService::class)->updateItem($item, [
+                'comment' => 'Updated comment',
+            ]);
+        } catch (Throwable $exception) {
+            $caughtException = $exception;
+        }
+
+        $freshItem = $item->fresh();
+
+        $this->assertSame('Original comment', $freshItem->comment);
+        $this->assertSame('4.000', $freshItem->quantity);
+        $this->assertInstanceOf(DomainException::class, $caughtException);
+        $this->assertSame('Cannot modify a posted transfer', $caughtException?->getMessage());
+    }
+
     public function test_item_cannot_be_added_to_posted_transfer(): void
     {
         $transfer = Transfer::factory()->create([
