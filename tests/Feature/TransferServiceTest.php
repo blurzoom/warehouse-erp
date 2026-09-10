@@ -666,6 +666,30 @@ class TransferServiceTest extends TestCase
         }
     }
 
+    public function test_posting_rolls_back_stock_status_and_movements_when_movement_creation_fails(): void
+    {
+        [$transfer, $sourceWarehouse, $destinationWarehouse, $product] = $this->createTransferWithItems([
+            [10, 4, 3],
+        ]);
+        StockMovement::creating(static function (): never {
+            throw new DomainException('Movement creation failed');
+        });
+        $caughtException = null;
+
+        try {
+            app(TransferService::class)->post($transfer);
+        } catch (Throwable $exception) {
+            $caughtException = $exception;
+        }
+
+        $this->assertInstanceOf(DomainException::class, $caughtException);
+        $this->assertSame('Movement creation failed', $caughtException->getMessage());
+        $this->assertSame(TransferStatus::Draft, $transfer->fresh()->status);
+        $this->assertStockQuantity($sourceWarehouse, $product, 10);
+        $this->assertStockQuantity($destinationWarehouse, $product, 3);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
     public function test_header_can_be_updated_on_a_draft_transfer(): void
     {
         $transfer = Transfer::factory()->create([
