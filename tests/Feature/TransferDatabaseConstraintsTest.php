@@ -40,6 +40,17 @@ class TransferDatabaseConstraintsTest extends TestCase
         $this->assertSame('posted', $transfer->status);
     }
 
+    public function test_transfer_date_is_indexed(): void
+    {
+        $hasTransferDateIndex = collect(Schema::getIndexes('transfers'))->contains(
+            fn (array $index): bool => $index['columns'] === ['transfer_date']
+                && $index['unique'] === false
+                && $index['primary'] === false,
+        );
+
+        $this->assertTrue($hasTransferDateIndex);
+    }
+
     public function test_transfer_rejects_status_outside_allowed_set(): void
     {
         $this->expectException(QueryException::class);
